@@ -4,20 +4,32 @@ use std::error::Error;
 #[test]
 fn test_node_not_found_error() {
     let error = GraphError::NodeNotFound(42);
-    assert_eq!(format!("{}", error), "Node with index 42 not found; it may be out of bounds or have been removed.");
+    assert_eq!(
+        format!("{}", error),
+        "Node with index 42 not found; it may be out of bounds or have been removed."
+    );
     assert!(error.source().is_none());
 }
 
 #[test]
 fn test_edge_creation_error() {
-    let error = GraphError::EdgeCreationError { source: 1, target: 2 };
-    assert_eq!(format!("{}", error), "Edge from 1 to 2 could not be created; a node may not exist or the edge already exists.");
+    let error = GraphError::EdgeCreationError {
+        source: 1,
+        target: 2,
+    };
+    assert_eq!(
+        format!("{}", error),
+        "Edge from 1 to 2 could not be created; a node may not exist or the edge already exists."
+    );
     assert!(error.source().is_none());
 }
 
 #[test]
 fn test_edge_not_found_error() {
-    let error = GraphError::EdgeNotFoundError { source: 10, target: 20 };
+    let error = GraphError::EdgeNotFoundError {
+        source: 10,
+        target: 20,
+    };
     assert_eq!(format!("{}", error), "Edge from 10 to 20 not found.");
     assert!(error.source().is_none());
 }
@@ -25,7 +37,10 @@ fn test_edge_not_found_error() {
 #[test]
 fn test_graph_contains_cycle_error() {
     let error = GraphError::GraphContainsCycle;
-    assert_eq!(format!("{}", error), "Operation failed because the graph contains a cycle.");
+    assert_eq!(
+        format!("{}", error),
+        "Operation failed because the graph contains a cycle."
+    );
     assert!(error.source().is_none());
 }
 
