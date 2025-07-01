@@ -57,6 +57,7 @@ impl<N, W> GraphAlgorithms<N, W> for CsmGraph<N, W> {
         None
     }
 
+    /// Returns true if the graph contains a cycle
     fn has_cycle(&self) -> bool {
         self.find_cycle().is_some()
     }

@@ -61,6 +61,23 @@ impl<N, W> CsmGraph<N, W> {
     }
 }
 
+impl<N, W> CsmGraph<N, W> {
+    // Internal helper for freeze 
+    pub(crate) fn construct(
+        nodes: Vec<N>,
+        forward_edges: (Vec<usize>, Vec<(usize, W)>),
+        backward_edges: (Vec<usize>, Vec<(usize, W)>),
+        root_index: Option<usize>,
+    ) -> Self {
+        Self {
+            nodes,
+            forward_edges,
+            backward_edges,
+            root_index,
+        }
+    }
+}
+
 impl<N, W> Default for CsmGraph<N, W> {
     fn default() -> Self {
         Self::new()
