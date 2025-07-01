@@ -14,10 +14,10 @@ pub trait GraphAlgorithms<N, W>: GraphView<N, W> {
     ///
     /// # Returns
     /// A `Result` containing an iterator that yields the `usize` indices of the neighbor nodes.
-    fn outbound_edges(&self, a: usize) -> Result<impl Iterator<Item = usize>, GraphError>;
+    fn outbound_edges(&self, a: usize) -> Result<impl Iterator<Item = usize> + '_, GraphError>;
 
     /// Returns a non-allocating iterator over the direct predecessors (incoming edges) of node `a`.
-    fn inbound_edges(&self, a: usize) -> Result<impl Iterator<Item = usize>, GraphError>;
+    fn inbound_edges(&self, a: usize) -> Result<impl Iterator<Item = usize> + '_, GraphError>;
 
     // --- Structural Validation Algorithms ---
 

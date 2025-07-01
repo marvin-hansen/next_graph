@@ -11,3 +11,17 @@ pub struct DynamicGraph<N, W> {
     // Index of the designated root node.
     root_index: Option<usize>,
 }
+
+impl<N, W> DynamicGraph<N, W> {
+    pub fn construct(
+        nodes: Vec<Option<N>>,
+        edges: Vec<Vec<(usize, W)>>,
+        root_index: Option<usize>,
+    ) -> Self {
+        Self {
+            nodes,
+            edges,
+            root_index,
+        }
+    }
+}
