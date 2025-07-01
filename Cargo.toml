@@ -1,0 +1,12 @@
+[package]
+name = "next_graph"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.88"
+repository = "https://github.com/marvin-hansen/next_graph"
+authors = ["Marvin Hansen <marvin.hansen@gmail.com>", ]
+license = "MIT"
+description = "Hypergraph data structure."
+categories = ["data-structures"]
+keywords = ["data-structures"]
+
