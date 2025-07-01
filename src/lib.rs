@@ -1,9 +1,9 @@
-pub mod error;
+mod errors;
 mod traits;
 mod types;
 
 // errors
-pub use error::GraphError;
+pub use errors::graph_error::GraphError;
 // traits
 pub use traits::graph_algo::GraphAlgorithms;
 pub use traits::graph_freeze::Freezable;

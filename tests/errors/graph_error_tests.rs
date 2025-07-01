@@ -1,4 +1,4 @@
-use next_graph::error::GraphError;
+use next_graph::GraphError;
 use std::error::Error;
 
 #[test]
