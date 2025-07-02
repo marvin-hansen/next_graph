@@ -230,6 +230,7 @@ name = "next_graph"
 version = "0.0.1"
 dependencies = [
  "criterion",
+ "rayon",
 ]
 
 [[package]]

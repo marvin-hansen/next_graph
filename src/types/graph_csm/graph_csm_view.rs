@@ -3,7 +3,7 @@ use crate::{CsmGraph, GraphView};
 // A constant defined for the adaptive `contains_edge` algorithm.
 const BINARY_SEARCH_THRESHOLD: usize = 64;
 
-impl<N, W> GraphView<N, W> for CsmGraph<N, W> {
+impl<N: Sync + Send, W: Sync + Send> GraphView<N, W> for CsmGraph<N, W> {
     /// Checks if the graph is in a frozen, high-performance state.
     /// For `CsmGraph`, this is always true by definition.
     fn is_frozen(&self) -> bool {
@@ -60,23 +60,6 @@ impl<N, W> GraphView<N, W> for CsmGraph<N, W> {
         self.forward_edges.1.len()
     }
 
-    /// Checks if a root node has been designated for this graph.
-    fn contains_root_node(&self) -> bool {
-        self.root_index.is_some()
-    }
-
-    /// Retrieves a reference to the payload of the designated root node, if one exists.
-    fn get_root_node(&self) -> Option<&N> {
-        // `and_then` provides a clean, functional way to chain Option lookups.
-        self.root_index.and_then(|index| self.get_node(index))
-    }
-
-    /// Retrieves the index of the designated root node, if one exists.
-    /// This is an O(1) operation/
-    fn get_root_index(&self) -> Option<usize> {
-        self.root_index
-    }
-
     /// Retrieves a list of all outgoing edges from a given source node.
     /// Returns `None` if the source node does not exist.
     /// The returned vector contains tuples of `(target_node_index, edge_weight_reference)`.
@@ -95,5 +78,22 @@ impl<N, W> GraphView<N, W> for CsmGraph<N, W> {
                 .map(|(target, weight)| (*target, weight))
                 .collect(),
         )
+    }
+
+    /// Checks if a root node has been designated for this graph.
+    fn contains_root_node(&self) -> bool {
+        self.root_index.is_some()
+    }
+
+    /// Retrieves a reference to the payload of the designated root node, if one exists.
+    fn get_root_node(&self) -> Option<&N> {
+        // `and_then` provides a clean, functional way to chain Option lookups.
+        self.root_index.and_then(|index| self.get_node(index))
+    }
+
+    /// Retrieves the index of the designated root node, if one exists.
+    /// This is an O(1) operation/
+    fn get_root_index(&self) -> Option<usize> {
+        self.root_index
     }
 }

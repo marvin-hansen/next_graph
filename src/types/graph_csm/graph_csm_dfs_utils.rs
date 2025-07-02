@@ -13,7 +13,7 @@ pub enum NodeState {
 }
 
 /// This private `impl` block contains internal helper logic for the `CsmGraph`.
-impl<N, W> CsmGraph<N, W> {
+impl<N: Sync + Send, W: Sync + Send>  CsmGraph<N, W> {
     pub(crate) fn dfs_visit_for_cycle(
         &self,
         u: usize,

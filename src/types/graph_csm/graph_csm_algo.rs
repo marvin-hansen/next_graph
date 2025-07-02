@@ -2,7 +2,7 @@ use crate::types::graph_csm::graph_csm_dfs_utils::NodeState;
 use crate::{CsmGraph, GraphAlgorithms, GraphError, GraphView};
 use std::collections::VecDeque;
 
-impl<N, W> GraphAlgorithms<N, W> for CsmGraph<N, W> {
+impl<N: Sync + Send, W: Sync + Send>  GraphAlgorithms<N, W> for CsmGraph<N, W> {
     /// Returns a non-allocating iterator over the direct successors (outgoing edges) of node `a`.
     fn outbound_edges(&self, a: usize) -> Result<impl Iterator<Item = usize> + '_, GraphError> {
         if !self.contains_node(a) {

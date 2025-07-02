@@ -10,6 +10,12 @@ description = "Hypergraph data structure."
 categories = ["data-structures"]
 keywords = ["data-structures"]
 
+[dependencies]
+rayon = { version = "1.10", optional = true }
+
+[features]
+parallel = ["rayon"]
+
 [dev-dependencies]
 criterion = { version = "0.6.0", features = ["html_reports"] }
 
