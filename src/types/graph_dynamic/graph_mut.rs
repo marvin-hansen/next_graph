@@ -9,9 +9,17 @@ impl<N, W> GraphMut<N, W> for DynamicGraph<N, W> {
     fn add_node(&mut self, node: N) -> usize {
         let index = self.nodes.len();
         self.nodes.push(Some(node));
-        self.edges.push(Vec::new()); // Add a corresponding empty edge list
+
+        if self.num_edges_per_node.is_some() {
+            let edge_capacity = self.num_edges_per_node.unwrap();
+            self.edges.push(Vec::with_capacity(edge_capacity)); // Add a corresponding edge list with edge_capacity
+        } else {
+            self.edges.push(Vec::default()); // Add a corresponding empty edge list
+        };
+
         index
     }
+
     /// Updates the node of an existing, non-tombstoned node.
     ///
     /// # Errors

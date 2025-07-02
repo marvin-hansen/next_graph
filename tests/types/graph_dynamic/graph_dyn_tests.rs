@@ -11,7 +11,14 @@ fn test_new_dynamic_graph() {
 
 #[test]
 fn test_with_capacity_dynamic_graph() {
-    let graph = DynamicGraph::<String, u32>::with_capacity(10);
+    let graph = DynamicGraph::<String, u32>::with_capacity(10, None);
+    assert_eq!(graph.number_nodes(), 0);
+    assert_eq!(graph.number_edges(), 0);
+    assert!(!graph.contains_root_node());
+    assert!(!graph.is_frozen());
+
+    // Crate with capacity of 10 nodes and each node with capacity of 4 edges per node 
+    let graph = DynamicGraph::<String, u32>::with_capacity(10, Some(4));
     assert_eq!(graph.number_nodes(), 0);
     assert_eq!(graph.number_edges(), 0);
     assert!(!graph.contains_root_node());

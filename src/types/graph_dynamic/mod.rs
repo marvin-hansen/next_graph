@@ -3,6 +3,10 @@ mod graph_mut;
 mod graph_view;
 
 pub struct DynamicGraph<N, W> {
+    // Optional pre-allocated capacity for each node's edge list.
+    // This is a performance optimization set by `with_capacity`.
+    // By default, no edge capacity is pre-allocated.
+    num_edges_per_node: Option<usize>,
     // Node payloads, indexed directly by `usize`.
     // The use of `Option` allows for efficient O(1) node removal ("tombstoning")
     // without invalidating other node indices.
@@ -38,6 +42,7 @@ impl<N, W> DynamicGraph<N, W> {
     /// ```
     pub fn new() -> Self {
         Self {
+            num_edges_per_node: None,
             nodes: Vec::new(),
             edges: Vec::new(),
             root_index: None,
@@ -51,9 +56,11 @@ impl<N, W> DynamicGraph<N, W> {
     /// memory reallocations during the `add_node` process.
     ///
     /// # Arguments
-    ///
-    /// * `num_nodes`: The number of nodes to pre-allocate space for. This will reserve
-    ///   capacity in both the node list and the primary adjacency list.
+    /// * `num_nodes`: The number of nodes to pre-allocate space for.
+    /// * `num_edges_per_node`: An optional hint for the average number of outgoing
+    ///   edges per node. Providing this pre-allocates memory for edge lists,
+    ///   making `add_edge` calls more performant and predictable by avoiding
+    ///   reallocations. If `None`, no capacity is pre-allocated for edges.
     ///
     /// # Note on Capacity
     ///
@@ -64,15 +71,17 @@ impl<N, W> DynamicGraph<N, W> {
     /// # Examples
     ///
     /// ```
-    /// use next_graph::DynamicGraph; // Replace with your crate name
+    /// use next_graph::{DynamicGraph, GraphView}; // Replace with your crate name
     ///
-    /// // Pre-allocate for a graph with around 1,000 nodes.
-    /// let graph = DynamicGraph::<(), ()>::with_capacity(1_000);
+    /// // Pre-allocate for a graph with ~1000 nodes and ~5 edges per node.
+    /// let graph = DynamicGraph::<(), ()>::with_capacity(1_000, Some(5));
+    ///
     /// // The graph is still empty, but its internal buffers are ready.
-    /// // assert_eq!(graph.number_nodes(), 0);
+    /// assert_eq!(graph.number_nodes(), 0);
     /// ```
-    pub fn with_capacity(num_nodes: usize) -> Self {
+    pub fn with_capacity(num_nodes: usize, num_edges_per_node: Option<usize>) -> Self {
         Self {
+            num_edges_per_node,
             nodes: Vec::with_capacity(num_nodes),
             edges: Vec::with_capacity(num_nodes),
             root_index: None,
@@ -94,6 +103,7 @@ impl<N, W> DynamicGraph<N, W> {
         root_index: Option<usize>,
     ) -> Self {
         Self {
+            num_edges_per_node: None,
             nodes,
             edges,
             root_index,
