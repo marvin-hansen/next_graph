@@ -1,2 +1,2 @@
 #![cfg(feature = "parallel")]
-pub mod graph_algo_par;
+pub mod graph_algo_ext;

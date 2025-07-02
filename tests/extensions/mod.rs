@@ -1,1 +1,1 @@
-mod graph_algo_par_tests;
+mod graph_algo_par_ext_tests;

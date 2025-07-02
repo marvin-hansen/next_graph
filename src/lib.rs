@@ -8,7 +8,7 @@ pub mod utils_test;
 pub use errors::graph_error::GraphError;
 // extensions - optional. Must be enabled as feature in Cargo.toml
 #[cfg(feature = "parallel")]
-pub use extensions::graph_algo_par::ParallelGraphAlgorithms;
+pub use extensions::graph_algo_ext::ParallelGraphAlgorithmsExt;
 // traits
 pub use traits::graph_algo::GraphAlgorithms;
 pub use traits::graph_freeze::Freezable;
