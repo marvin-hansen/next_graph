@@ -29,7 +29,7 @@ use crate::{CsmGraph, DynamicGraph, Unfreezable};
 /// This infallible signature provides a strong guarantee to the user: transitioning
 /// from an analysis state back to an evolutionary state is always a safe and
 /// predictable operation.
-impl<N: Clone +Sync + Send, W: Clone +Sync + Send> Unfreezable<N, W> for CsmGraph<N, W> {
+impl<N: Clone + Sync + Send, W: Clone + Sync + Send> Unfreezable<N, W> for CsmGraph<N, W> {
     /// Consumes the static graph to create a dynamic, mutable representation.
     ///
     /// This is an O(V + E) operation that re-builds the flexible adjacency list

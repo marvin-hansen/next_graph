@@ -1,4 +1,4 @@
-use crate::{CsmGraph, GraphAlgorithms};
+use crate::{CsmGraph, GraphTraversal};
 
 /// Private enum representing the state of a node during a DFS traversal.
 /// It is not part of the public API.
@@ -13,7 +13,7 @@ pub enum NodeState {
 }
 
 /// This private `impl` block contains internal helper logic for the `CsmGraph`.
-impl<N: Sync + Send, W: Sync + Send>  CsmGraph<N, W> {
+impl<N: Sync + Send, W: Sync + Send> CsmGraph<N, W> {
     pub(crate) fn dfs_visit_for_cycle(
         &self,
         u: usize,

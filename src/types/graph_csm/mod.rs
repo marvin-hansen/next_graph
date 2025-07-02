@@ -2,6 +2,7 @@ mod graph_csm_algo;
 pub mod graph_csm_dfs_utils;
 mod graph_csm_unfreeze;
 mod graph_csm_view;
+mod graph_traversal;
 
 pub struct CsmGraph<N, W> {
     // Node payloads, indexed directly by `usize`.
