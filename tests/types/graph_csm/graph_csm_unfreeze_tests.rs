@@ -2,8 +2,8 @@ use next_graph::{CsmGraph, DynamicGraph, Freezable, GraphView, Unfreezable};
 
 #[cfg(test)]
 mod csm_graph_unfreeze_tests {
-    use next_graph::GraphMut;
     use super::*;
+    use next_graph::GraphMut;
 
     #[test]
     fn test_unfreeze_empty_graph() {
@@ -72,8 +72,16 @@ mod csm_graph_unfreeze_tests {
         assert_eq!(targets_from_n0, vec![n1, n1, n2]);
 
         // Check specific edge weights (requires iterating, as `contains_edge` doesn't check weight)
-        let has_edge_0_1_10 = dynamic_graph.get_edges(n0).unwrap().iter().any(|&(t, w)| t == n1 && w == &10);
-        let has_edge_0_1_15 = dynamic_graph.get_edges(n0).unwrap().iter().any(|&(t, w)| t == n1 && w == &15);
+        let has_edge_0_1_10 = dynamic_graph
+            .get_edges(n0)
+            .unwrap()
+            .iter()
+            .any(|&(t, w)| t == n1 && w == &10);
+        let has_edge_0_1_15 = dynamic_graph
+            .get_edges(n0)
+            .unwrap()
+            .iter()
+            .any(|&(t, w)| t == n1 && w == &15);
         assert!(has_edge_0_1_10);
         assert!(has_edge_0_1_15);
     }
@@ -95,7 +103,9 @@ mod csm_graph_unfreeze_tests {
         let root_idx = dynamic_graph_orig.get_root_index().unwrap();
 
         dynamic_graph_orig.remove_node(n1).unwrap();
-        dynamic_graph_orig.update_node(root_idx, "NEW_ROOT".to_string()).unwrap();
+        dynamic_graph_orig
+            .update_node(root_idx, "NEW_ROOT".to_string())
+            .unwrap();
 
         let csm_graph = dynamic_graph_orig.freeze();
         let dynamic_graph: DynamicGraph<String, u32> = csm_graph.unfreeze();
@@ -127,5 +137,103 @@ mod csm_graph_unfreeze_tests {
         assert!(dynamic_graph.contains_root_node());
         assert_eq!(dynamic_graph.get_root_node(), Some(&"NEW_ROOT".to_string()));
         assert_eq!(dynamic_graph.get_root_index(), Some(3)); // Old root (idx 4) is now new root (idx 3)
+    }
+
+    #[test]
+    fn test_unfreeze_single_node_no_edges() {
+        let mut dynamic_graph_orig = DynamicGraph::new();
+        dynamic_graph_orig.add_node("Single".to_string());
+
+        let csm_graph = dynamic_graph_orig.freeze();
+        let dynamic_graph: DynamicGraph<String, u32> = csm_graph.unfreeze();
+
+        assert_eq!(dynamic_graph.number_nodes(), 1);
+        assert_eq!(dynamic_graph.number_edges(), 0);
+        assert!(dynamic_graph.contains_node(0));
+        assert_eq!(dynamic_graph.get_node(0), Some(&"Single".to_string()));
+        assert!(!dynamic_graph.contains_root_node());
+    }
+
+    #[test]
+    fn test_unfreeze_single_node_with_self_loop() {
+        let mut dynamic_graph_orig = DynamicGraph::new();
+        let n0 = dynamic_graph_orig.add_node("Loop".to_string());
+        dynamic_graph_orig.add_edge(n0, n0, 100).unwrap();
+
+        let csm_graph = dynamic_graph_orig.freeze();
+        let dynamic_graph: DynamicGraph<String, u32> = csm_graph.unfreeze();
+
+        assert_eq!(dynamic_graph.number_nodes(), 1);
+        assert_eq!(dynamic_graph.number_edges(), 1);
+        assert!(dynamic_graph.contains_node(0));
+        assert_eq!(dynamic_graph.get_node(0), Some(&"Loop".to_string()));
+        assert!(dynamic_graph.contains_edge(n0, n0));
+        assert_eq!(dynamic_graph.get_edges(n0).unwrap().len(), 1);
+        assert_eq!(dynamic_graph.get_edges(n0).unwrap()[0], (n0, &100));
+    }
+
+    #[test]
+    fn test_unfreeze_graph_with_root_not_last_node() {
+        let mut dynamic_graph_orig = DynamicGraph::new();
+        dynamic_graph_orig.add_node("A".to_string());
+        dynamic_graph_orig.add_root_node("ROOT".to_string()); // Root is at index 1
+        dynamic_graph_orig.add_node("B".to_string());
+
+        let csm_graph = dynamic_graph_orig.freeze();
+        let dynamic_graph: DynamicGraph<String, u32> = csm_graph.unfreeze();
+
+        assert_eq!(dynamic_graph.number_nodes(), 3);
+        assert_eq!(dynamic_graph.get_node(0), Some(&"A".to_string()));
+        assert_eq!(dynamic_graph.get_node(1), Some(&"ROOT".to_string()));
+        assert_eq!(dynamic_graph.get_node(2), Some(&"B".to_string()));
+        assert!(dynamic_graph.contains_root_node());
+        assert_eq!(dynamic_graph.get_root_index(), Some(1));
+        assert_eq!(dynamic_graph.get_root_node(), Some(&"ROOT".to_string()));
+    }
+
+    #[test]
+    fn test_unfreeze_graph_with_complex_edges() {
+        let mut dynamic_graph_orig = DynamicGraph::new();
+        let n0 = dynamic_graph_orig.add_node("Node0".to_string());
+        let n1 = dynamic_graph_orig.add_node("Node1".to_string());
+        let n2 = dynamic_graph_orig.add_node("Node2".to_string());
+        let n3 = dynamic_graph_orig.add_node("Node3".to_string());
+
+        dynamic_graph_orig.add_edge(n0, n1, 1).unwrap();
+        dynamic_graph_orig.add_edge(n0, n2, 2).unwrap();
+        dynamic_graph_orig.add_edge(n1, n2, 3).unwrap();
+        dynamic_graph_orig.add_edge(n2, n3, 4).unwrap();
+        dynamic_graph_orig.add_edge(n0, n1, 5).unwrap(); // Parallel edge
+
+        let csm_graph = dynamic_graph_orig.freeze();
+        let dynamic_graph: DynamicGraph<String, u32> = csm_graph.unfreeze();
+
+        assert_eq!(dynamic_graph.number_nodes(), 4);
+        assert_eq!(dynamic_graph.number_edges(), 5);
+
+        // Verify edges from n0
+        let edges_from_n0 = dynamic_graph.get_edges(n0).unwrap();
+        assert_eq!(edges_from_n0.len(), 3);
+        let mut expected_n0_edges = vec![(n1, &1), (n2, &2), (n1, &5)];
+        expected_n0_edges.sort_unstable();
+        let mut actual_n0_edges = edges_from_n0
+            .iter()
+            .map(|&(t, w)| (t, w))
+            .collect::<Vec<_>>();
+        actual_n0_edges.sort_unstable();
+        assert_eq!(actual_n0_edges, expected_n0_edges);
+
+        // Verify edges from n1
+        let edges_from_n1 = dynamic_graph.get_edges(n1).unwrap();
+        assert_eq!(edges_from_n1.len(), 1);
+        assert_eq!(edges_from_n1[0], (n2, &3));
+
+        // Verify edges from n2
+        let edges_from_n2 = dynamic_graph.get_edges(n2).unwrap();
+        assert_eq!(edges_from_n2.len(), 1);
+        assert_eq!(edges_from_n2[0], (n3, &4));
+
+        // Verify edges from n3 (no outgoing edges)
+        assert!(dynamic_graph.get_edges(n3).unwrap().is_empty());
     }
 }

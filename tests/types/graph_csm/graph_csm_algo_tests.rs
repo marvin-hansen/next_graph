@@ -1,4 +1,4 @@
-use next_graph::{CsmGraph, DynamicGraph, Freezable, GraphAlgorithms, GraphError};
+use next_graph::{CsmGraph, DynamicGraph, Freezable, GraphAlgorithms, GraphError, GraphMut};
 
 #[cfg(test)]
 mod csm_graph_algo_tests {
@@ -37,7 +37,10 @@ mod csm_graph_algo_tests {
         assert!(edges_n4.is_empty());
 
         // Test non-existent node
-        assert!(matches!(graph.outbound_edges(99), Err(GraphError::NodeNotFound(99))));
+        assert!(matches!(
+            graph.outbound_edges(99),
+            Err(GraphError::NodeNotFound(99))
+        ));
     }
 
     #[test]
@@ -55,7 +58,10 @@ mod csm_graph_algo_tests {
         assert!(edges_n0.is_empty());
 
         // Test non-existent node
-        assert!(matches!(graph.inbound_edges(99), Err(GraphError::NodeNotFound(99))));
+        assert!(matches!(
+            graph.inbound_edges(99),
+            Err(GraphError::NodeNotFound(99))
+        ));
     }
 
     #[test]
@@ -225,5 +231,157 @@ mod csm_graph_algo_tests {
         // No path from 0 to 2
         let graph = dynamic_graph.freeze();
         assert_eq!(graph.shortest_path(0, 2), None);
+    }
+
+    #[test]
+    fn test_find_cycle_empty_graph() {
+        let dynamic_graph = DynamicGraph::<String, u32>::new();
+        let csm_graph = dynamic_graph.freeze();
+        assert_eq!(csm_graph.find_cycle(), None);
+    }
+
+    #[test]
+    fn test_find_cycle_single_node_no_edges() {
+        let mut dynamic_graph = DynamicGraph::<String, u32>::new();
+        dynamic_graph.add_node("A".to_string());
+        let csm_graph = dynamic_graph.freeze();
+        assert_eq!(csm_graph.find_cycle(), None);
+    }
+
+    #[test]
+    fn test_topological_sort_empty_graph() {
+        let dynamic_graph = DynamicGraph::<String, u32>::new();
+        let csm_graph = dynamic_graph.freeze();
+        assert_eq!(csm_graph.topological_sort(), Some(vec![]));
+    }
+
+    #[test]
+    fn test_topological_sort_single_node_no_edges() {
+        let mut dynamic_graph = DynamicGraph::<String, u32>::new();
+        dynamic_graph.add_node("A".to_string());
+        let csm_graph = dynamic_graph.freeze();
+        assert_eq!(csm_graph.topological_sort(), Some(vec![0]));
+    }
+
+    #[test]
+    fn test_find_cycle_self_loop() {
+        let mut dynamic_graph = DynamicGraph::new();
+        let n0 = dynamic_graph.add_node("A".to_string());
+        dynamic_graph.add_edge(n0, n0, 10).unwrap(); // Self-loop
+        let graph = dynamic_graph.freeze();
+        let cycle = graph.find_cycle();
+        assert!(cycle.is_some());
+        assert_eq!(cycle.unwrap(), vec![0, 0]);
+    }
+
+    #[test]
+    fn test_find_cycle_multiple_cycles() {
+        let mut dynamic_graph = DynamicGraph::new();
+        let n0 = dynamic_graph.add_node("A".to_string());
+        let n1 = dynamic_graph.add_node("B".to_string());
+        let n2 = dynamic_graph.add_node("C".to_string());
+        let n3 = dynamic_graph.add_node("D".to_string());
+
+        // Cycle 1: 0 -> 1 -> 0
+        dynamic_graph.add_edge(n0, n1, 1).unwrap();
+        dynamic_graph.add_edge(n1, n0, 1).unwrap();
+
+        // Cycle 2: 2 -> 3 -> 2
+        dynamic_graph.add_edge(n2, n3, 1).unwrap();
+        dynamic_graph.add_edge(n3, n2, 1).unwrap();
+
+        let graph = dynamic_graph.freeze();
+        let cycle = graph.find_cycle();
+        assert!(cycle.is_some());
+        // The exact cycle found depends on DFS traversal order, but it should be one of them.
+        let path = cycle.unwrap();
+        assert_eq!(path.len(), 2);
+        assert!(
+            (path == vec![0, 1] || path == vec![1, 0] || path == vec![2, 3] || path == vec![3, 2])
+        );
+    }
+
+    #[test]
+    fn test_topological_sort_complex_disconnected() {
+        let mut dynamic_graph = DynamicGraph::new();
+        // Component 1: 0 -> 1 -> 2
+        let n0 = dynamic_graph.add_node("A".to_string());
+        let n1 = dynamic_graph.add_node("B".to_string());
+        let n2 = dynamic_graph.add_node("C".to_string());
+        dynamic_graph.add_edge(n0, n1, 1).unwrap();
+        dynamic_graph.add_edge(n1, n2, 1).unwrap();
+
+        // Component 2: 3 -> 4
+        let n3 = dynamic_graph.add_node("D".to_string());
+        let n4 = dynamic_graph.add_node("E".to_string());
+        dynamic_graph.add_edge(n3, n4, 1).unwrap();
+
+        // Component 3: 5 (isolated)
+        dynamic_graph.add_node("F".to_string());
+
+        let graph = dynamic_graph.freeze();
+        let sort = graph.topological_sort();
+        assert!(sort.is_some());
+        let sorted_nodes = sort.unwrap();
+        assert_eq!(sorted_nodes.len(), 6);
+
+        // Verify dependencies within components
+        let pos_0 = sorted_nodes.iter().position(|&n| n == n0).unwrap();
+        let pos_1 = sorted_nodes.iter().position(|&n| n == n1).unwrap();
+        let pos_2 = sorted_nodes.iter().position(|&n| n == n2).unwrap();
+        assert!(pos_0 < pos_1);
+        assert!(pos_1 < pos_2);
+
+        let pos_3 = sorted_nodes.iter().position(|&n| n == n3).unwrap();
+        let pos_4 = sorted_nodes.iter().position(|&n| n == n4).unwrap();
+        assert!(pos_3 < pos_4);
+
+        // Isolated node 5 can be anywhere relative to others
+    }
+
+    #[test]
+    fn test_shortest_path_len_complex() {
+        let mut dynamic_graph = DynamicGraph::new();
+        let n0 = dynamic_graph.add_node("A".to_string());
+        let n1 = dynamic_graph.add_node("B".to_string());
+        let n2 = dynamic_graph.add_node("C".to_string());
+        let n3 = dynamic_graph.add_node("D".to_string());
+        let n4 = dynamic_graph.add_node("E".to_string());
+
+        dynamic_graph.add_edge(n0, n1, 1).unwrap();
+        dynamic_graph.add_edge(n0, n2, 1).unwrap();
+        dynamic_graph.add_edge(n1, n3, 1).unwrap();
+        dynamic_graph.add_edge(n2, n3, 1).unwrap();
+        dynamic_graph.add_edge(n3, n4, 1).unwrap();
+
+        let graph = dynamic_graph.freeze();
+
+        assert_eq!(graph.shortest_path_len(n0, n4), Some(4)); // 0->1->3->4 or 0->2->3->4
+        assert_eq!(graph.shortest_path_len(n0, n3), Some(3));
+    }
+
+    #[test]
+    fn test_shortest_path_complex() {
+        let mut dynamic_graph = DynamicGraph::new();
+        let n0 = dynamic_graph.add_node("A".to_string());
+        let n1 = dynamic_graph.add_node("B".to_string());
+        let n2 = dynamic_graph.add_node("C".to_string());
+        let n3 = dynamic_graph.add_node("D".to_string());
+        let n4 = dynamic_graph.add_node("E".to_string());
+
+        dynamic_graph.add_edge(n0, n1, 1).unwrap();
+        dynamic_graph.add_edge(n0, n2, 1).unwrap();
+        dynamic_graph.add_edge(n1, n3, 1).unwrap();
+        dynamic_graph.add_edge(n2, n3, 1).unwrap();
+        dynamic_graph.add_edge(n3, n4, 1).unwrap();
+
+        let graph = dynamic_graph.freeze();
+
+        let path = graph.shortest_path(n0, n4).unwrap();
+        assert_eq!(path.len(), 4);
+        assert_eq!(path[0], n0);
+        assert_eq!(path[3], n4);
+        // Path could be 0->1->3->4 or 0->2->3->4. Check that it's a valid path.
+        assert!((path[1] == n1 && path[2] == n3) || (path[1] == n2 && path[2] == n3));
     }
 }

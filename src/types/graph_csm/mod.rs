@@ -1,5 +1,5 @@
 mod graph_csm_algo;
-mod graph_csm_dfs_utils;
+pub mod graph_csm_dfs_utils;
 mod graph_csm_unfreeze;
 mod graph_csm_view;
 

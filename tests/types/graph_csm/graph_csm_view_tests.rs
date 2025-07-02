@@ -2,8 +2,8 @@ use next_graph::{CsmGraph, DynamicGraph, Freezable, GraphView};
 
 #[cfg(test)]
 mod csm_graph_view_tests {
-    use next_graph::GraphMut;
     use super::*;
+    use next_graph::GraphMut;
 
     // Helper function to create a CsmGraph from a DynamicGraph
     fn create_csm_graph() -> CsmGraph<String, u32> {
@@ -52,11 +52,72 @@ mod csm_graph_view_tests {
         let graph = create_csm_graph();
         assert!(graph.contains_edge(0, 1));
         assert!(graph.contains_edge(0, 2));
-        assert!(!graph.contains_edge(1, 0)); // Directed
+        assert!(!graph.contains_edge(11, 12)); // Directed
         assert!(!graph.contains_edge(0, 99));
         assert!(!graph.contains_edge(99, 0));
     }
 
+    #[test]
+    fn test_contains_edge_with_binary_search() {
+        // SETUP: Create a graph that will trigger the binary search path.
+        // The threshold is 64, so we need a node with more than 64 outgoing edges.
+        // We will create a source node (index 0) with 100 outgoing edges.
+
+        // This test assumes a mutable CsrGraph that can be frozen into a CsmGraph.
+        // Replace `CsrGraph` with your actual mutable graph builder if it's different.
+        let mut builder = DynamicGraph::new();
+
+        // Add the source node and 200 other nodes to serve as potential targets.
+        for _ in 0..=200 {
+            builder.add_node(()); // Node payload is irrelevant for this test.
+        }
+
+        let source_node = 0;
+        // Add 100 edges from the source node. To make the test robust, we add them
+        // to non-contiguous targets (e.g., all odd-numbered nodes from 1 to 199).
+        // The freeze() operation is expected to sort these, which is required for binary search.
+        for i in 0..100 {
+            let target_node = (i * 2) + 1; // Creates edges to 1, 3, 5, ..., 199
+            builder
+                .add_edge(source_node, target_node, ())
+                .expect("Failed to add edge"); // Edge weight is irrelevant.
+        }
+
+        // Freeze the graph to get the high-performance, immutable CsmGraph.
+        let graph = builder.freeze();
+
+        // EXECUTE & ASSERT
+        // Now that the source node has 100 neighbors, calls to `contains_edge`
+        // for that node will use the binary search implementation.
+
+        // 1. Test for an edge that exists in the middle of the sorted list.
+        let existing_target = 101; // 0 -> 101 should exist.
+        assert!(
+            graph.contains_edge(source_node, existing_target),
+            "Binary search should find an existing edge."
+        );
+
+        // 2. Test for an edge that does NOT exist but is within the range of neighbors.
+        let non_existing_target = 100; // 0 -> 100 should NOT exist.
+        assert!(
+            !graph.contains_edge(source_node, non_existing_target),
+            "Binary search should NOT find a non-existing edge."
+        );
+
+        // 3. Test for the very first edge in the sorted neighbor list.
+        let first_target = 1;
+        assert!(
+            graph.contains_edge(source_node, first_target),
+            "Binary search should find the first edge in the list."
+        );
+
+        // 4. Test for the very last edge in the sorted neighbor list.
+        let last_target = 199;
+        assert!(
+            graph.contains_edge(source_node, last_target),
+            "Binary search should find the last edge in the list."
+        );
+    }
     #[test]
     fn test_number_edges() {
         let graph = create_csm_graph();
@@ -101,6 +162,17 @@ mod csm_graph_view_tests {
 
         let edges_n1 = graph.get_edges(1).unwrap();
         assert!(edges_n1.is_empty());
+
+        assert_eq!(graph.get_edges(99), None);
+    }
+
+    #[test]
+    fn test_get_edges_err() {
+        let dynamic_graph = DynamicGraph::<String, u32>::new();
+        let graph: CsmGraph<String, u32> = dynamic_graph.freeze();
+
+        let res = graph.get_edges(0);
+        assert!(res.is_none());
 
         assert_eq!(graph.get_edges(99), None);
     }

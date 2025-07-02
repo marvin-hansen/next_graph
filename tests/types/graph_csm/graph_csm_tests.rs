@@ -2,8 +2,8 @@ use next_graph::CsmGraph;
 
 #[cfg(test)]
 mod csm_graph_tests {
-    use next_graph::GraphView;
     use super::*;
+    use next_graph::GraphView;
 
     #[test]
     fn test_new_csm_graph() {

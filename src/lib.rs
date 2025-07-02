@@ -1,6 +1,6 @@
 mod errors;
 mod traits;
-mod types;
+pub mod types;
 
 // errors
 pub use errors::graph_error::GraphError;
