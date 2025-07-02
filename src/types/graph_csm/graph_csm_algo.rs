@@ -1,4 +1,4 @@
-use crate::types::graph_csm::graph_dfs_utils::NodeState;
+use crate::types::graph_csm::graph_csm_dfs_utils::NodeState;
 use crate::{CsmGraph, GraphAlgorithms, GraphError, GraphView};
 use std::collections::VecDeque;
 

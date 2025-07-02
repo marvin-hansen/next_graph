@@ -28,14 +28,15 @@ impl<N, W> CsmGraph<N, W> {
                 // we have found a back edge, which means we have a cycle.
                 if states[v] == NodeState::VisitingInProgress {
                     // CYCLE DETECTED!
-                    let mut cycle = vec![v, u];
+                    let mut cycle = vec![u];
                     let mut current = u;
                     while let Some(pred) = predecessors[current] {
-                        cycle.push(pred);
                         if pred == v {
+                            cycle.push(v);
                             cycle.reverse();
                             return Some(cycle);
                         }
+                        cycle.push(pred);
                         current = pred;
                     }
                 }
