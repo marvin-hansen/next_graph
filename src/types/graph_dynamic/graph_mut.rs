@@ -30,6 +30,37 @@ impl<N, W> GraphMut<N, W> for DynamicGraph<N, W> {
         }
     }
 
+    /// Removes a node from the graph, effectively "tombstoning" it.
+    ///
+    /// This operation marks the node as removed by setting its `Option<N>` to `None`,
+    /// preserving the stability of existing node indices. Edges connected to
+    /// this node are logically removed but remain in the adjacency lists until
+    /// the graph is `freeze`n.
+    ///
+    /// # Errors
+    /// Returns `GraphError::NodeNotFound` if the index is out of bounds or if the
+    /// node at that index has already been removed.
+    fn remove_node(&mut self, index: usize) -> Result<(), GraphError> {
+        // `get_mut` performs the bounds check.
+        match self.nodes.get_mut(index) {
+            // Check if the node is not already a tombstone.
+            Some(node_slot) if node_slot.is_some() => {
+                *node_slot = None; // "Tombstone" the node
+                // Clear its outgoing edges. Incoming edges will be handled during freeze.
+                if let Some(edges_list) = self.edges.get_mut(index) {
+                    edges_list.clear();
+                }
+                // If this was the root, clear the root index
+                if self.root_index == Some(index) {
+                    self.root_index = None;
+                }
+                Ok(())
+            }
+            // Either out of bounds or already a tombstone.
+            _ => Err(GraphError::NodeNotFound(index)),
+        }
+    }
+
     /// Adds a directed edge between two nodes with a given weight.
     ///
     /// # Errors

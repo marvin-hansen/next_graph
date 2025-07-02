@@ -17,6 +17,12 @@ pub struct DynamicGraph<N, W> {
 }
 
 impl<N, W> DynamicGraph<N, W> {
+    pub fn root_index(&self) -> Option<usize> {
+        self.root_index
+    }
+}
+
+impl<N, W> DynamicGraph<N, W> {
     /// Creates a new, empty `DynamicGraph`.
     ///
     /// The graph is initialized with no nodes, no edges, and no capacity. This is

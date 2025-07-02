@@ -76,4 +76,24 @@ impl<N, W> GraphView<N, W> for CsmGraph<N, W> {
     fn get_root_index(&self) -> Option<usize> {
         self.root_index
     }
+
+    /// Retrieves a list of all outgoing edges from a given source node.
+    /// Returns `None` if the source node does not exist.
+    /// The returned vector contains tuples of `(target_node_index, edge_weight_reference)`.
+    fn get_edges(&self, source: usize) -> Option<Vec<(usize, &W)>> {
+        if !self.contains_node(source) {
+            return None;
+        }
+
+        let start = self.forward_edges.0[source];
+        let end = self.forward_edges.0[source + 1];
+        let slice = &self.forward_edges.1[start..end];
+
+        Some(
+            slice
+                .iter()
+                .map(|(target, weight)| (*target, weight))
+                .collect(),
+        )
+    }
 }
