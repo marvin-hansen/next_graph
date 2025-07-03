@@ -5,8 +5,7 @@ const BINARY_SEARCH_THRESHOLD: usize = 64;
 
 impl<N, W> GraphView<N, W> for CsmGraph<N, W>
 where
-    N: Sync + Send,
-    W: Sync + Send + Default,
+    W: Default,
 {
     /// Checks if the graph is in a frozen, high-performance state.
     /// For `CsmGraph`, this is always true by definition.
