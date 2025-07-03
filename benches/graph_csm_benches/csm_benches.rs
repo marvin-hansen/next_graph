@@ -129,6 +129,25 @@ fn bench_csm_graph(c: &mut Criterion) {
             },
         );
     });
+
+    // This will properly measure the performance of the freeze/unfreeze operations
+    // on a graph that does not fit in the CPU cache.
+    construction_group.bench_function("freeze (1M nodes, 5M edges)", |b| {
+        b.iter_with_setup(
+            || create_general_graph_dyn(1_000_000, 5),
+            |graph_to_freeze| {
+                black_box(graph_to_freeze.freeze());
+            },
+        );
+    });
+    construction_group.bench_function("unfreeze (1M nodes, 5M edges)", |b| {
+        b.iter_with_setup(
+            || create_general_graph_dyn(1_000_000, 5).freeze(),
+            |frozen_graph| {
+                black_box(frozen_graph.unfreeze());
+            },
+        );
+    });
     construction_group.finish();
 }
 

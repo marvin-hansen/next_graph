@@ -1,6 +1,10 @@
 use crate::types::graph_csm::CsrAdjacency;
 use crate::{CsmGraph, DynamicGraph, Freezable};
 
+// Refers to the number of outgoing edges for a single node,
+// which is also known as the node's degree.
+const RADIX_SORT_THRESHOLD: usize = 128;
+
 // This implementation requires that the edge weight `W` is both `Clone` (to be
 // duplicated for the forward and backward graphs) and `Default` (to allow for
 // efficient, safe allocation of the final adjacency vectors).
@@ -49,7 +53,6 @@ where
 
         let mut compacted_nodes = Vec::with_capacity(old_nodes.len());
         let mut remapping_table = vec![0; old_nodes.len()];
-        // **IMPROVEMENT**: Explicitly track which nodes were removed.
         let mut is_tombstoned = vec![false; old_nodes.len()];
         let mut new_root_index = None;
         let mut total_edges = 0;
@@ -81,11 +84,9 @@ where
         let mut in_degrees = vec![0; num_new_nodes];
 
         for (old_source_idx, edge_list) in old_edges.iter().enumerate() {
-            // **IMPROVEMENT**: Use the clear, unambiguous tombstone check.
             if !is_tombstoned[old_source_idx] {
                 let new_source_idx = remapping_table[old_source_idx];
                 for (old_target_idx, _) in edge_list {
-                    // Also ensure the target wasn't tombstoned.
                     if !is_tombstoned[*old_target_idx] {
                         let new_target_idx = remapping_table[*old_target_idx];
                         out_degrees[new_source_idx] += 1;
@@ -96,9 +97,10 @@ where
             }
         }
 
-        // --- Offset Calculation (Cumulative Sum) ---
-        let fwd_offsets = calculate_offsets(&out_degrees);
-        let back_offsets = calculate_offsets(&in_degrees);
+        // --- Offset Calculation ---
+        // Use the fast sequential helper for this step.
+        let fwd_offsets = calculate_offsets_sequential(&out_degrees);
+        let back_offsets = calculate_offsets_sequential(&in_degrees);
 
         // --- Second Pass: Placement ---
         let mut fwd_targets = vec![0; total_edges];
@@ -110,9 +112,7 @@ where
         let mut back_offsets_copy = back_offsets.clone();
 
         // Place each edge into its correct position in the CSR arrays.
-        // We can now safely use `into_iter` to avoid cloning weights unnecessarily.
         for (old_source_idx, edge_list) in old_edges.into_iter().enumerate() {
-            // **IMPROVEMENT**: Use the same robust check here.
             if !is_tombstoned[old_source_idx] {
                 let new_source_idx = remapping_table[old_source_idx];
                 for (old_target_idx, weight) in edge_list {
@@ -122,22 +122,42 @@ where
                         // Forward placement
                         let fwd_write_head = fwd_offsets_copy[new_source_idx];
                         fwd_targets[fwd_write_head] = new_target_idx;
-                        fwd_weights[fwd_write_head] = weight.clone(); // Clone for backward edge
+                        fwd_weights[fwd_write_head] = weight.clone();
                         fwd_offsets_copy[new_source_idx] += 1;
 
                         // Backward placement
                         let back_write_head = back_offsets_copy[new_target_idx];
                         back_targets[back_write_head] = new_source_idx;
-                        back_weights[back_write_head] = weight; // Move the original weight
+                        back_weights[back_write_head] = weight;
                         back_offsets_copy[new_target_idx] += 1;
                     }
                 }
             }
         }
 
+        // --- Final Step: Sequential Sorting ---
         // Sort the adjacency lists for each node to enable binary search lookups.
-        sort_adjacencies(&fwd_offsets, &mut fwd_targets, &mut fwd_weights);
-        sort_adjacencies(&back_offsets, &mut back_targets, &mut back_weights);
+        for i in 0..num_new_nodes {
+            // Sort forward edges
+            let start = fwd_offsets[i];
+            let end = fwd_offsets[i + 1];
+            if start < end {
+                sort_single_adjacency_list(
+                    &mut fwd_targets[start..end],
+                    &mut fwd_weights[start..end],
+                );
+            }
+
+            // Sort backward edges
+            let start = back_offsets[i];
+            let end = back_offsets[i + 1];
+            if start < end {
+                sort_single_adjacency_list(
+                    &mut back_targets[start..end],
+                    &mut back_weights[start..end],
+                );
+            }
+        }
 
         // --- Final Construction ---
         let forward_edges = CsrAdjacency {
@@ -160,8 +180,11 @@ where
     }
 }
 
-/// Helper function to calculate CSR offsets from a degree count vector.
-fn calculate_offsets(degrees: &[usize]) -> Vec<usize> {
+/// A fast, sequential implementation of a prefix sum (cumulative sum).
+/// This is used to calculate the CSR offset arrays. While it's sequential, it is
+/// extremely cache-friendly and often faster than a parallel version for all but
+/// the most massive graphs due to the lack of coordination overhead.
+fn calculate_offsets_sequential(degrees: &[usize]) -> Vec<usize> {
     let mut offsets = Vec::with_capacity(degrees.len() + 1);
     let mut total = 0;
     offsets.push(total);
@@ -172,30 +195,102 @@ fn calculate_offsets(degrees: &[usize]) -> Vec<usize> {
     offsets
 }
 
-/// Helper function to sort the adjacency lists within the CSR arrays.
-fn sort_adjacencies<W>(offsets: &[usize], targets: &mut [usize], weights: &mut [W])
+/// Helper function to sort a single adjacency list within the CSR arrays.
+/// This is now an ADAPTIVE sorter when targets.len exceeds RADIX_SORT_THRESHOLD
+fn sort_single_adjacency_list<W>(targets: &mut [usize], weights: &mut [W])
 where
-    W: Clone,
+    W: Clone + Default,
 {
-    for i in 0..offsets.len() - 1 {
-        let start = offsets[i];
-        let end = offsets[i + 1];
-        if start < end {
-            // Create a temporary Vec of tuples to sort by target index.
-            let mut slice_to_sort: Vec<_> = targets[start..end]
-                .iter()
-                .zip(weights[start..end].iter())
-                .map(|(&t, w)| (t, w.clone()))
-                .collect();
+    if targets.len() < RADIX_SORT_THRESHOLD {
+        // For small lists, the overhead of Radix Sort isn't worth it.
+        // The simple, allocation-based comparison sort is faster.
+        let mut slice_to_sort: Vec<_> = targets
+            .iter()
+            .zip(weights.iter())
+            .map(|(&t, w)| (t, w.clone()))
+            .collect();
 
-            // Sort unstably by target index, which is faster.
-            slice_to_sort.sort_unstable_by_key(|(target, _)| *target);
+        slice_to_sort.sort_unstable_by_key(|(target, _)| *target);
 
-            // Write the sorted data back to the main arrays.
-            for (j, (target, weight)) in slice_to_sort.into_iter().enumerate() {
-                targets[start + j] = target;
-                weights[start + j] = weight;
-            }
+        for (j, (target, weight)) in slice_to_sort.into_iter().enumerate() {
+            targets[j] = target;
+            weights[j] = weight;
         }
+    } else {
+        // For larger lists, use the allocation-free,
+        // high-performance Radix Sort.
+        radix_sort_adjacencies(targets, weights);
     }
+}
+/// A highly optimized, allocation-free Radix Sort for our specific CSR layout.
+///
+/// This function sorts the `targets` slice and applies the exact same swaps to the
+/// `weights` slice in lockstep, ensuring they remain synchronized. It uses LSD
+/// Radix Sort, which is not a comparison sort and can be significantly faster
+/// than `sort_unstable` for integer keys.
+///
+/// # Arguments
+/// * `targets`: The slice of `usize` node indices to be sorted.
+/// * `weights`: The slice of corresponding edge weights that must be reordered.
+fn radix_sort_adjacencies<W>(targets: &mut [usize], weights: &mut [W])
+where
+    W: Default + Clone,
+{
+    let len = targets.len();
+    if len < 2 {
+        // A list of 0 or 1 elements is already sorted.
+        return;
+    }
+
+    // Create scratch buffers once to avoid allocations inside the loop.
+    let mut targets_buffer = vec![0; len];
+    let mut weights_buffer = vec![W::default(); len];
+
+    // We will "ping-pong" between the original slices and the buffer slices.
+    // `current_` points to the data to be sorted in this pass.
+    // `next_` points to where the sorted data will be written.
+    let mut current_targets = &mut *targets;
+    let mut current_weights = &mut *weights;
+    let mut next_targets = &mut targets_buffer[..];
+    let mut next_weights = &mut weights_buffer[..];
+
+    // Process the `usize` keys 8 bits (1 byte) at a time.
+    for i in 0..std::mem::size_of::<usize>() {
+        let shift = i * 8;
+
+        // 1. Counting pass: Count occurrences of each byte value in the current data.
+        let mut counts = [0; 256];
+        for &target in current_targets.iter() {
+            let key = (target >> shift) & 0xFF;
+            counts[key] += 1;
+        }
+
+        // 2. Prefix sum: Calculate the starting offset for each byte value.
+        let mut offsets = [0; 256];
+        for j in 1..256 {
+            offsets[j] = offsets[j - 1] + counts[j - 1];
+        }
+
+        // 3. Placement pass: Move elements from `current` to `next` buffers.
+        for j in 0..len {
+            let target = current_targets[j];
+            let key = (target >> shift) & 0xFF;
+            let write_pos = offsets[key];
+
+            next_targets[write_pos] = target;
+            // Use mem::take to move the weight without cloning, preserving data.
+            next_weights[write_pos] = std::mem::take(&mut current_weights[j]);
+
+            offsets[key] += 1;
+        }
+
+        // 4. Swap buffers: The `next` buffer is now the `current` for the next pass.
+        std::mem::swap(&mut current_targets, &mut next_targets);
+        std::mem::swap(&mut current_weights, &mut next_weights);
+    }
+
+    // After all passes, the data is fully sorted. Because we swap an even number
+    // of times (8 passes for a 64-bit usize), the final sorted data will always
+    // end up back in the original `targets` and `weights` slices.
+    // No final copy-back is needed.
 }

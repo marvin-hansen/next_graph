@@ -167,3 +167,55 @@ fn test_freeze_graph_with_all_nodes_tombstoned() {
     assert_eq!(csm_graph.number_edges(), 0);
     assert!(!csm_graph.contains_root_node());
 }
+
+#[test]
+fn test_freeze_with_super_node_triggers_radix_sort() {
+    // This constant must be greater than the `RADIX_SORT_THRESHOLD` (128)
+    // in `graph_freeze.rs` to ensure the Radix Sort path is triggered.
+    const NUM_SPOKES: usize = 250;
+    let mut graph = DynamicGraph::<(), ()>::new();
+
+    let hub_node = graph.add_node(());
+    let mut spoke_nodes = Vec::new();
+
+    // Add all the spoke nodes first.
+    for _ in 0..NUM_SPOKES {
+        // We use a payload to make debugging easier if the test fails.
+        spoke_nodes.push(graph.add_node(()));
+    }
+
+    // Add edges from the hub to the spokes in a non-sorted order (reverse)
+    // to ensure the sorting logic is robustly exercised.
+    for &spoke_node in spoke_nodes.iter().rev() {
+        graph.add_edge(hub_node, spoke_node, ()).unwrap();
+    }
+
+    // Freeze the graph. This is the operation under test.
+    // It should trigger the Radix Sort path for the hub node's adjacency list.
+    let frozen_graph = graph.freeze();
+
+    // --- Verification ---
+
+    // 1. Basic structural verification.
+    assert_eq!(frozen_graph.number_nodes(), NUM_SPOKES + 1);
+    assert_eq!(frozen_graph.number_edges(), NUM_SPOKES);
+
+    // 2. Verify the sorting of the super-node's adjacency list.
+    //    `get_edges` on a CsmGraph returns edges based on the sorted CSR data.
+    let edges = frozen_graph.get_edges(hub_node).unwrap();
+    assert_eq!(edges.len(), NUM_SPOKES);
+
+    // Extract just the target node indices from the returned edges.
+    let target_indices: Vec<usize> = edges.iter().map(|(target, _)| *target).collect();
+
+    // Create the expected, correctly sorted list of spoke node indices.
+    let mut expected_sorted_spokes = spoke_nodes;
+    expected_sorted_spokes.sort_unstable();
+
+    // 3. The final, critical assertion.
+    //    This confirms that the adjacency list was correctly sorted during the freeze.
+    assert_eq!(
+        target_indices, expected_sorted_spokes,
+        "Adjacency list for the super-node was not sorted correctly during freeze."
+    );
+}
