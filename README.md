@@ -108,6 +108,112 @@ println!("Phase 1: Building the graph...");
 }
 ```
 
+## 🚀 Performance
+
+`next_graph` is designed from the ground up for  performance and efficiency, allowing it to handle
+large-scale graphs with millions of nodes and edges with ease. Its core data structure, `CsmGraph`, is an immutable,
+cache-friendly representation that enables lightning-fast traversals and analytics.
+
+The performance benchmarks below were run on an Apple M3 Max with 16 cores.
+
+### Benchmark Results
+
+| Operation       | Scale | Graph Configuration                        |  Mean Time  | Throughput               |
+|:----------------|:------|:-------------------------------------------|:-----------:|:-------------------------|
+| **Edge Lookup** | Tiny  | `contains_edge` (Linear Scan, degree < 64) | **~7.7 ns** | ~130 Million lookups/sec |
+|                 | Tiny  | `contains_edge` (Binary Search)            | **~8.2 ns** | ~122 Million lookups/sec |
+| **Algorithms**  | Small | `shortest_path` (1k nodes)                 | **~5.3 µs** | ~188,000 paths/sec       |
+|                 | Small | `topological_sort` (1k nodes, DAG)         | **~5.2 µs** | ~192,000 sorts/sec       |
+|                 | Small | `find_cycle` (1k nodes, has cycle)         | **~7.1 µs** | ~140,000 checks/sec      |
+|                 | Large | `shortest_path` (1M nodes, 5M edges)       | **~482 µs** | ~2,000 paths/sec         |
+|                 | Large | `topological_sort` (1M nodes, 5M edges)    | **~2.9 ms** | ~345 sorts/sec           |
+| **Lifecycle**   | Small | `freeze` (1k nodes, 999 edges)             | **~42 µs**  | ~23,800 freezes/sec      |
+|                 | Small | `unfreeze` (1k nodes, 999 edges)           | **~12 µs**  | ~81,600 unfreezes/sec    |
+|                 | Large | `freeze` (1M nodes, 5M edges)              | **~75 ms**  | ~13 freezes/sec          |
+|                 | Large | `unfreeze` (1M nodes, 5M edges)            | **~24 ms**  | ~41 unfreezes/sec        |
+
+*(Note: Time units are nanoseconds (ns), microseconds (µs), and milliseconds (ms). Throughput is an approximate
+calculation based on the mean time.)*
+
+### Performance Design
+
+The design of `next_graph`'s static analysis structure, `CsmGraph`, is based on the principles for high-performance
+sparse graph representation detailed in the paper "NWHy: A Framework for Hypergraph Analytics" (Liu et al.).
+Specifically, `next_graph` adopts the paper's foundational model of using two mutually-indexed Compressed Sparse Row (
+CSR) structures to enable efficient, `O(degree)` bidirectional traversal—one for forward (outbound) edges and one for
+the transposed graph for backward (inbound) edges.
+
+However, `next_graph` introduces three significant architectural enhancements over this baseline to provide optimal
+performance and to support the specific requirements of dynamically evolving systems.
+
+1. **Struct of Arrays (SoA) Memory Layout:** The internal CSR adjacency structures are implemented using a Struct of
+   Arrays layout. Instead of a single `Vec<(target, weight)>`, `next_graph` uses two parallel vectors: `Vec<target>` and
+   `Vec<weight>`. This memory layout improves data locality for topology-only algorithms (e.g., reachability, cycle
+   detection). By iterating exclusively over the `targets` vector, these algorithms avoid loading unused edge weight
+   data into the CPU cache, which minimizes memory bandwidth usage and reduces cache pollution.
+
+2. **Adaptive Edge Containment Checks:** The `contains_edge` method employs a hybrid algorithm that adapts to the data's
+   shape at runtime. It performs an `O(1)` degree check on the source node and selects the optimal search strategy: a
+   cache-friendly linear scan for low-degree nodes (where the number of neighbors is less than a compile-time threshold,
+   e.g., 64) and a logarithmically faster binary search for high-degree nodes. This ensures the best possible lookup
+   performance across varied graph structures.
+
+3. **Formal Evolutionary Lifecycle:** The most significant architectural addition is a formal two-state model for graph
+   evolution. `next_graph` defines two distinct representations: a mutable `DynamicGraph` optimized for efficient `O(1)`
+   node and edge additions, and the immutable `CsmGraph` optimized for analysis. The library provides high-performance
+   `O(V + E)` `.freeze()` and `.unfreeze()` operations to transition between these states. This two-state model directly
+   supports systems that require dynamic structural evolution, such as those modeling emergent causality, by providing a
+   controlled mechanism to separate the mutation phase from the immutable analysis phase.
+
+While the NWHypergraph paper provides an excellent blueprint for a high-performance static graph engine, these
+modifications extend that foundation into a more flexible, cache-aware, and dynamically adaptable framework
+purpose-built for the lifecycle of evolving graph systems.
+
+### Estimated Performance and Memory at Scale
+
+Ideal Conditions: Time estimates assume linear scalability and do not account for potential system bottlenecks like
+memory bandwidth saturation at extreme scales. These numbers represent a best-case scenario based on the initial
+benchmarks.
+
+1. **Complexity:** Time and space complexity are assumed to be **O(V + E)**.
+2. **Density:** The graph is assumed to have a constant density of **5 edges per node** (`E = 5 * V`).
+3. **Data Types:** Memory is calculated assuming `u64` for node payloads (8 bytes) and `u64` for edge weights (8 bytes).
+   `usize` is assumed to be 8 bytes (64-bit system). The `CsrAdjacency` uses the optimized Struct of Arrays (SoA)
+   layout.
+4. **Ideal Conditions:** Time estimates assume linear scalability and do not account for potential system bottlenecks
+   like memory bandwidth saturation at extreme scales. These numbers represent a best-case scenario based on the initial
+   benchmarks.
+
+| Graph Size (Nodes) | Edges (Est.) | Memory Footprint (Est.) | Freeze Time (Est.) | Shortest Path (Est.) | Topo Sort / Find Cycle (Est.) |
+|:-------------------|:-------------|:------------------------|:-------------------|:---------------------|:------------------------------|
+| **1 Million**      | 5 Million    | **~184 MB**             | **75 ms**          | **0.48 ms**          | **2.9 ms**                    |
+| **10 Million**     | 50 Million   | **~1.8 GB**             | **750 ms**         | **4.8 ms**           | **29 ms**                     |
+| **50 Million**     | 250 Million  | **~9.2 GB**             | **3.75 seconds**   | **24 ms**            | **145 ms**                    |
+| **100 Million**    | 500 Million  | **~18.4 GB**            | **7.5 seconds**    | **48 ms**            | **290 ms**                    |
+| **500 Million**    | 2.5 Billion  | **~92 GB**              | **37.5 seconds**   | **241 ms**           | **1.45 seconds**              |
+| **1 Billion**      | 5 Billion    | **~184 GB**             | **~75 seconds**    | **~482 ms**          | **~2.9 seconds**              |
+
+---
+
+These are estimated values interpolated from the previous benchmark results meant as an indicator for
+how much hardware each class of graph size would require. For precise measurements, please design and
+run realistic benchmarks that approximate your specific workload.
+
+For any graph that can fit within a typical server's RAM, nearly every analytical query
+is sub-second. This is the sweet spot for interactive, near-real-time data exploration on a massive scale.
+
+he table clearly shows that the primary limiting factor is memory. A graph with 500 million nodes is
+computationally trivial to analyze (a topological_sort takes less than 1.5 seconds), but it requires a machine with at
+least 92 GB of dedicated RAM for the graph structure alone.
+
+With a freeze time of just over a minute and a memory footprint under
+200 GB, this class of problem is solvable on a single, high-memory workstation available today.
+For example, a commercially available M3 Ultra Mac Studio can be configured with up to 512GB unified memory
+that haas 819GB/s memory bandwidth and thus process complex graphs up to 2 billion nodes and 5 billion edges
+with single digit second processing time. As a matter of fact, a single data center server (for example, Dell PowerEdge)
+with 3 TB of memory can process a graph with a staggering 16 billion nodes and up to 80 billion edges and still complete
+the shortest path algorithm within 10 seconds or less.
+
 ## 📜 Licence
 
 This project is licensed under the [MIT license](LICENSE).
