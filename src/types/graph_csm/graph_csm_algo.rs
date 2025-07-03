@@ -1,4 +1,4 @@
-use crate::{CsmGraph, GraphAlgorithms, GraphTraversal, GraphView};
+use crate::{CsmGraph, GraphAlgorithms, GraphView};
 use std::collections::VecDeque;
 use std::slice;
 
@@ -40,48 +40,6 @@ where
     ///   number of edges, as each node and edge is visited exactly once.
     /// - **Space Complexity:** O(V) for storing node states, predecessors, and the DFS stack.
     ///
-    /// # Example
-    ///
-    ///
-    /// Checks if the graph contains any directed cycles.
-    ///
-    /// This implementation leverages the iterative `topological_sort` method,
-    /// making it a highly robust way to detect cycles in graphs of any size
-    /// without risking a stack overflow.
-    ///
-    /// use next_graph::{DynamicGraph, Freezable, GraphAlgorithms, GraphMut};
-    ///
-    /// // --- Graph with a cycle ---
-    /// let mut dynamic_graph = DynamicGraph::new();
-    /// let n0 = dynamic_graph.add_node("A");
-    /// let n1 = dynamic_graph.add_node("B");
-    /// let n2 = dynamic_graph.add_node("C");
-    ///
-    /// dynamic_graph.add_edge(n0, n1, ()).unwrap();
-    /// dynamic_graph.add_edge(n1, n2, ()).unwrap();
-    /// dynamic_graph.add_edge(n2, n0, ()).unwrap(); // Cycle: 0 -> 1 -> 2 -> 0
-    ///
-    /// let graph = dynamic_graph.freeze();
-    /// let cycle = graph.find_cycle();
-    ///
-    /// assert!(cycle.is_some());
-    /// let path = cycle.unwrap();
-    /// // The path explicitly shows the closed loop, e.g., [0, 1, 2, 0].
-    /// assert_eq!(path.len(), 4);
-    /// assert_eq!(path.first(), path.last());
-    /// assert!(path.contains(&n0));
-    /// assert!(path.contains(&n1));
-    /// assert!(path.contains(&n2));
-    ///
-    /// // --- Graph with no cycle (DAG) ---
-    /// let mut dag = DynamicGraph::new();
-    /// let n0 = dag.add_node("A");
-    /// let n1 = dag.add_node("B");
-    /// dag.add_edge(n0, n1, ()).unwrap();
-    ///
-    /// let graph_no_cycle = dag.freeze();
-    /// assert_eq!(graph_no_cycle.find_cycle(), None);
-    /// ```
     fn find_cycle(&self) -> Option<Vec<usize>> {
         let num_nodes = self.number_nodes();
         if num_nodes == 0 {
@@ -130,7 +88,6 @@ where
                             predecessors[v] = Some(u);
                             states[v] = NodeState::VisitingInProgress;
 
-                            // --- FIX: Manually create the concrete iterator here as well ---
                             let v_start = self.forward_edges.offsets[v];
                             let v_end = self.forward_edges.offsets[v + 1];
                             let v_neighbors = self.forward_edges.targets[v_start..v_end].iter();
@@ -148,6 +105,11 @@ where
         None // No cycles found after checking all nodes.
     }
 
+    /// Checks if the graph contains any directed cycles.
+    ///
+    /// This implementation leverages the iterative `topological_sort` method,
+    /// making it a highly robust way to detect cycles in graphs of any size
+    /// without risking a stack overflow.
     fn has_cycle(&self) -> bool {
         self.topological_sort().is_none()
     }
@@ -167,27 +129,19 @@ where
             return Some(Vec::new());
         }
 
-        // --- Kahn's Algorithm Implementation ---
-
-        // 1. Compute in-degrees for all nodes. This is an O(V+E) operation.
+        // 1. Compute in-degrees for all nodes.
         let mut in_degrees = vec![0; num_nodes];
-        // This loop structure is generally more cache-friendly than iterating
-        // inbound_edges for each node individually.
         for i in 0..num_nodes {
-            if let Ok(neighbors) = self.outbound_edges(i) {
-                for neighbor in neighbors {
-                    in_degrees[neighbor] += 1;
-                }
+            //  Access CSR arrays directly for max performance.
+            let start = self.forward_edges.offsets[i];
+            let end = self.forward_edges.offsets[i + 1];
+            for &neighbor in &self.forward_edges.targets[start..end] {
+                in_degrees[neighbor] += 1;
             }
         }
 
         // 2. Initialize a queue with all nodes that have an in-degree of 0.
-        let mut queue = VecDeque::with_capacity(num_nodes);
-        for i in 0..num_nodes {
-            if in_degrees[i] == 0 {
-                queue.push_back(i);
-            }
-        }
+        let mut queue: VecDeque<usize> = (0..num_nodes).filter(|&i| in_degrees[i] == 0).collect();
 
         // 3. Process the queue.
         let mut sorted_list = Vec::with_capacity(num_nodes);
@@ -195,20 +149,18 @@ where
             sorted_list.push(u);
 
             // For each neighbor of the dequeued node, decrement its in-degree.
-            if let Ok(neighbors) = self.outbound_edges(u) {
-                for v in neighbors {
-                    in_degrees[v] -= 1;
-                    // If a neighbor's in-degree becomes 0, it's ready to be processed.
-                    if in_degrees[v] == 0 {
-                        queue.push_back(v);
-                    }
+            //  Access CSR arrays directly.
+            let start = self.forward_edges.offsets[u];
+            let end = self.forward_edges.offsets[u + 1];
+            for &v in &self.forward_edges.targets[start..end] {
+                in_degrees[v] -= 1;
+                if in_degrees[v] == 0 {
+                    queue.push_back(v);
                 }
             }
         }
 
-        // 4. Validate the result. If the sorted list includes all nodes, the sort
-        // was successful. Otherwise, a cycle was present and prevented some nodes
-        // from being processed.
+        // 4. Validate the result.
         if sorted_list.len() == num_nodes {
             Some(sorted_list)
         } else {
@@ -237,8 +189,10 @@ where
         visited[start_index] = true;
 
         while let Some((current_node, current_len)) = queue.pop_front() {
-            // The unwrap() is safe here because we've already confirmed the node exists.
-            for neighbor in self.outbound_edges(current_node).unwrap() {
+            //  Access CSR arrays directly.
+            let start = self.forward_edges.offsets[current_node];
+            let end = self.forward_edges.offsets[current_node + 1];
+            for &neighbor in &self.forward_edges.targets[start..end] {
                 if neighbor == stop_index {
                     return Some(current_len + 1);
                 }
@@ -269,8 +223,10 @@ where
 
         let mut found = false;
         'bfs_loop: while let Some(current_node) = queue.pop_front() {
-            // The unwrap() is safe here because we've already confirmed the node exists.
-            for neighbor in self.outbound_edges(current_node).unwrap() {
+            //  Access CSR arrays directly.
+            let start = self.forward_edges.offsets[current_node];
+            let end = self.forward_edges.offsets[current_node + 1];
+            for &neighbor in &self.forward_edges.targets[start..end] {
                 if !visited[neighbor] {
                     visited[neighbor] = true;
                     predecessors[neighbor] = Some(current_node);
