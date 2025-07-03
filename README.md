@@ -110,7 +110,7 @@ println!("Phase 1: Building the graph...");
 
 ## 🚀 Performance
 
-`next_graph` is designed from the ground up for  performance and efficiency, allowing it to handle
+`next_graph` is designed from the ground up for performance and efficiency, allowing it to handle
 large-scale graphs with millions of nodes and edges with ease. Its core data structure, `CsmGraph`, is an immutable,
 cache-friendly representation that enables lightning-fast traversals and analytics.
 
@@ -118,19 +118,19 @@ The performance benchmarks below were run on an Apple M3 Max with 16 cores.
 
 ### Benchmark Results
 
-| Operation       | Scale | Graph Configuration                        |  Mean Time  | Throughput               |
-|:----------------|:------|:-------------------------------------------|:-----------:|:-------------------------|
-| **Edge Lookup** | Tiny  | `contains_edge` (Linear Scan, degree < 64) | **~7.7 ns** | ~130 Million lookups/sec |
-|                 | Tiny  | `contains_edge` (Binary Search)            | **~8.2 ns** | ~122 Million lookups/sec |
-| **Algorithms**  | Small | `shortest_path` (1k nodes)                 | **~5.3 µs** | ~188,000 paths/sec       |
-|                 | Small | `topological_sort` (1k nodes, DAG)         | **~5.2 µs** | ~192,000 sorts/sec       |
-|                 | Small | `find_cycle` (1k nodes, has cycle)         | **~7.1 µs** | ~140,000 checks/sec      |
-|                 | Large | `shortest_path` (1M nodes, 5M edges)       | **~482 µs** | ~2,000 paths/sec         |
-|                 | Large | `topological_sort` (1M nodes, 5M edges)    | **~2.9 ms** | ~345 sorts/sec           |
-| **Lifecycle**   | Small | `freeze` (1k nodes, 999 edges)             | **~42 µs**  | ~23,800 freezes/sec      |
-|                 | Small | `unfreeze` (1k nodes, 999 edges)           | **~12 µs**  | ~81,600 unfreezes/sec    |
-|                 | Large | `freeze` (1M nodes, 5M edges)              | **~75 ms**  | ~13 freezes/sec          |
-|                 | Large | `unfreeze` (1M nodes, 5M edges)            | **~24 ms**  | ~41 unfreezes/sec        |
+| Operation       | Scale | Graph Configuration                          |  Mean Time  | Throughput (Est.)        |
+|:----------------|:------|:---------------------------------------------|:-----------:|:-------------------------|
+| **Edge Lookup** | Tiny  | `contains_edge` (Linear Scan, degree < 64)   | **~7.7 ns** | ~130 Million lookups/sec |
+|                 | Tiny  | `contains_edge` (Binary Search, degree > 64) | **~8.2 ns** | ~122 Million lookups/sec |
+| **Algorithms**  | Small | `shortest_path` (1k nodes)                   | **~5.3 µs** | ~188,000 paths/sec       |
+|                 | Small | `topological_sort` (1k nodes, DAG)           | **~5.2 µs** | ~192,000 sorts/sec       |
+|                 | Small | `find_cycle` (1k nodes, has cycle)           | **~7.1 µs** | ~140,000 checks/sec      |
+|                 | Large | `shortest_path` (1M nodes, 5M edges)         | **~482 µs** | ~2,000 paths/sec         |
+|                 | Large | `topological_sort` (1M nodes, 5M edges)      | **~2.9 ms** | ~345 sorts/sec           |
+| **Lifecycle**   | Small | `freeze` (1k nodes, 999 edges)               | **~42 µs**  | ~23,800 freezes/sec      |
+|                 | Small | `unfreeze` (1k nodes, 999 edges)             | **~12 µs**  | ~81,600 unfreezes/sec    |
+|                 | Large | `freeze` (1M nodes, 5M edges)                | **~75 ms**  | ~13 freezes/sec          |
+|                 | Large | `unfreeze` (1M nodes, 5M edges)              | **~24 ms**  | ~41 unfreezes/sec        |
 
 *(Note: Time units are nanoseconds (ns), microseconds (µs), and milliseconds (ms). Throughput is an approximate
 calculation based on the mean time.)*
@@ -213,6 +213,16 @@ that haas 819GB/s memory bandwidth and thus process complex graphs up to 2 billi
 with single digit second processing time. As a matter of fact, a single data center server (for example, Dell PowerEdge)
 with 3 TB of memory can process a graph with a staggering 16 billion nodes and up to 80 billion edges and still complete
 the shortest path algorithm within 10 seconds or less.
+
+## Misc.
+
+Parallel graph algorithms have been experimented with using Rayon, but none yielded any performance improvements.
+Therefore, the parallel implementation has been feature gated and moved inside an optional type extension. 
+It is not entirely clear why the parallelism on graphs with one million nodes yielded no improvement, 
+but at this stage it is assumed to be an implementation problem because parallel graph
+algorithms are notoriously hard to implement correctly. Contributions and PR's with improvements of
+the parallel code are welcome. The general recommendation is to stick with the existing algorithms as these are the most
+optimized.
 
 ## 📜 Licence
 
