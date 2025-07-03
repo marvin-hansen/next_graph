@@ -202,12 +202,12 @@ run realistic benchmarks that approximate your specific workload.
 For any graph that can fit within a typical server's RAM, nearly every analytical query
 is sub-second. This is the sweet spot for interactive, near-real-time data exploration on a massive scale.
 
-he table clearly shows that the primary limiting factor is memory. A graph with 500 million nodes is
-computationally trivial to analyze (a topological_sort takes less than 1.5 seconds), but it requires a machine with at
-least 92 GB of dedicated RAM for the graph structure alone.
+The table shows that the primary limiting factor is memory. A graph with 500 million nodes is
+computationally trivial to analyze (a topological_sort takes less than 1.5 seconds),  
+but it requires a machine with at least 92 GB of available RAM.
 
-With a freeze time of just over a minute and a memory footprint under
-200 GB, this class of problem is solvable on a single, high-memory workstation available today.
+**Billion node graphs:** With a freeze time of just over a minute and a memory footprint under
+200 GB, this class of problem is solvable on a single high-memory workstation available today.
 For example, a commercially available M3 Ultra Mac Studio can be configured with up to 512GB unified memory
 that haas 819GB/s memory bandwidth and thus process complex graphs up to 2 billion nodes and 5 billion edges
 with single digit second processing time. As a matter of fact, a single data center server (for example, Dell PowerEdge)
