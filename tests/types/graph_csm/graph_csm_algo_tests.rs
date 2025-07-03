@@ -22,7 +22,7 @@ fn test_find_cycle_with_cycle() {
     let cycle = graph.find_cycle();
     assert!(cycle.is_some());
     let path = cycle.unwrap();
-    assert_eq!(path.len(), 3);
+    assert_eq!(path.len(), 4);
     assert!(path.contains(&0));
     assert!(path.contains(&1));
     assert!(path.contains(&2));
@@ -232,8 +232,17 @@ fn test_find_cycle_multiple_cycles() {
     assert!(cycle.is_some());
     // The exact cycle found depends on DFS traversal order, but it should be one of them.
     let path = cycle.unwrap();
-    assert_eq!(path.len(), 2);
-    assert!((path == vec![0, 1] || path == vec![1, 0] || path == vec![2, 3] || path == vec![3, 2]));
+    assert_eq!(path.len(), 3);
+    assert_eq!(path.first(), path.last(), "Path should be a closed loop");
+
+    // The exact cycle found depends on DFS traversal order
+    // , but it should be one of the valid cycle paths.
+    assert!(
+        path == vec![0, 1, 0]
+            || path == vec![1, 0, 1]
+            || path == vec![2, 3, 2]
+            || path == vec![3, 2, 3]
+    );
 }
 
 #[test]

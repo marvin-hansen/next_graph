@@ -1,26 +1,40 @@
 mod graph_csm_algo;
-pub mod graph_csm_dfs_utils;
 mod graph_csm_unfreeze;
 mod graph_csm_view;
 mod graph_traversal;
 
-pub struct CsmGraph<N, W> {
+// The "Struct of Arrays" (SoA) representation for adjacencies.
+// This is now a first-class, albeit private, component of the CsmGraph.
+// It derives Default for convenience in constructors.
+#[derive(Default)]
+pub(crate) struct CsrAdjacency<W> {
+    pub(crate) offsets: Vec<usize>,
+    pub(crate) targets: Vec<usize>,
+    pub(crate) weights: Vec<W>,
+}
+
+pub struct CsmGraph<N, W>
+where
+    W: Default,
+{
     // Node payloads, indexed directly by `usize`.
     nodes: Vec<N>,
 
-    // CSR structure for forward traversal (successors).
-    forward_edges: (Vec<usize>, Vec<(usize, W)>),
+    // CsrAdjacency structure for forward traversal (successors).
+    // The CsrAdjacency makes the intent of the data layout explicit and clean.
+    forward_edges: CsrAdjacency<W>,
 
     // CSR structure for backward traversal (predecessors).
-    backward_edges: (Vec<usize>, Vec<(usize, W)>),
+    backward_edges: CsrAdjacency<W>,
 
     // Index of the designated root node.
     root_index: Option<usize>,
 }
 
-impl<N, W> CsmGraph<N, W> {
-    // In `impl<N, W> CsmGraph<N, W>`
-
+impl<N, W> CsmGraph<N, W>
+where
+    W: Default,
+{
     /// Creates a new, empty `CsmGraph`.
     ///
     /// The graph will have zero nodes and zero edges.
@@ -28,13 +42,16 @@ impl<N, W> CsmGraph<N, W> {
         Self {
             nodes: Vec::new(),
 
-            // The forward CSR is empty. The offsets vector must contain a single `0`
-            // to correctly represent the `V + 1` length rule, where V=0.
-            forward_edges: (vec![0], Vec::new()),
-
-            // The backward CSR is also empty.
-            backward_edges: (vec![0], Vec::new()),
-
+            // Initialize with a valid empty CSR state. The offsets vector must
+            // contain a single `0` to correctly represent the `V + 1` length rule, where V=0.
+            forward_edges: CsrAdjacency {
+                offsets: vec![0],
+                ..Default::default()
+            },
+            backward_edges: CsrAdjacency {
+                offsets: vec![0],
+                ..Default::default()
+            },
             root_index: None,
         }
     }
@@ -50,24 +67,30 @@ impl<N, W> CsmGraph<N, W> {
     pub fn with_capacity(num_nodes: usize) -> Self {
         Self {
             nodes: Vec::with_capacity(num_nodes),
-            // The forward CSR is empty. The offsets vector must contain a single `0`
-            // to correctly represent the `V + 1` length rule, where V=0.
-            forward_edges: (vec![0], Vec::new()),
-
-            // The backward CSR is also empty.
-            backward_edges: (vec![0], Vec::new()),
-
+            // Initialize with a valid empty CSR state. The offsets vector must
+            // contain a single `0` to correctly represent the `V + 1` length rule, where V=0.
+            forward_edges: CsrAdjacency {
+                offsets: vec![0],
+                ..Default::default()
+            },
+            backward_edges: CsrAdjacency {
+                offsets: vec![0],
+                ..Default::default()
+            },
             root_index: None,
         }
     }
 }
 
-impl<N, W> CsmGraph<N, W> {
+impl<N, W> CsmGraph<N, W>
+where
+    W: Default,
+{
     // Internal helper for freeze
     pub(crate) fn construct(
         nodes: Vec<N>,
-        forward_edges: (Vec<usize>, Vec<(usize, W)>),
-        backward_edges: (Vec<usize>, Vec<(usize, W)>),
+        forward_edges: CsrAdjacency<W>,
+        backward_edges: CsrAdjacency<W>,
         root_index: Option<usize>,
     ) -> Self {
         Self {
@@ -79,7 +102,10 @@ impl<N, W> CsmGraph<N, W> {
     }
 }
 
-impl<N, W> Default for CsmGraph<N, W> {
+impl<N, W> Default for CsmGraph<N, W>
+where
+    W: Default,
+{
     fn default() -> Self {
         Self::new()
     }

@@ -3,7 +3,11 @@ use crate::{CsmGraph, GraphView};
 // A constant defined for the adaptive `contains_edge` algorithm.
 const BINARY_SEARCH_THRESHOLD: usize = 64;
 
-impl<N: Sync + Send, W: Sync + Send> GraphView<N, W> for CsmGraph<N, W> {
+impl<N, W> GraphView<N, W> for CsmGraph<N, W>
+where
+    N: Sync + Send,
+    W: Sync + Send + Default,
+{
     /// Checks if the graph is in a frozen, high-performance state.
     /// For `CsmGraph`, this is always true by definition.
     fn is_frozen(&self) -> bool {
@@ -36,28 +40,29 @@ impl<N: Sync + Send, W: Sync + Send> GraphView<N, W> for CsmGraph<N, W> {
         }
 
         // Get the slice of neighbors for node `a`. This is an O(1) operation.
-        let start = self.forward_edges.0[a];
-        let end = self.forward_edges.0[a + 1];
-        let neighbors_slice = &self.forward_edges.1[start..end];
+        let start = self.forward_edges.offsets[a];
+        let end = self.forward_edges.offsets[a + 1];
+
+        // The slice is now taken from the dedicated `targets` vector. This is more
+        // cache-efficient if the algorithm doesn't need the weights.
+        let targets_slice = &self.forward_edges.targets[start..end];
 
         // Choose the best algorithm based on the number of neighbors.
-        if neighbors_slice.len() < BINARY_SEARCH_THRESHOLD {
-            // For small lists, a linear scan is faster due to cache locality.
-            neighbors_slice.iter().any(|(target, _)| *target == b)
+        if targets_slice.len() < BINARY_SEARCH_THRESHOLD {
+            // For small lists, a linear scan over a simple `Vec<usize>` is extremely fast.
+            targets_slice.iter().any(|&target| target == b)
         } else {
             // For larger lists, binary search is asymptotically faster.
             // This relies on the slice being pre-sorted by target index during `.freeze()`.
-            neighbors_slice
-                .binary_search_by_key(&b, |(target, _)| *target)
-                .is_ok()
+            targets_slice.binary_search(&b).is_ok()
         }
     }
 
     /// Returns the total number of edges in the graph.
-    /// This is an O(1) operation, as it's just the length of the adjacency vector.
+    /// This is an O(1) operation, as it's just the length of the targets vector.
     fn number_edges(&self) -> usize {
-        // The forward and backward adjacency lists must have the same length.
-        self.forward_edges.1.len()
+        // The number of edges is the length of the flat targets vector.
+        self.forward_edges.targets.len()
     }
 
     /// Retrieves a list of all outgoing edges from a given source node.
@@ -68,14 +73,19 @@ impl<N: Sync + Send, W: Sync + Send> GraphView<N, W> for CsmGraph<N, W> {
             return None;
         }
 
-        let start = self.forward_edges.0[source];
-        let end = self.forward_edges.0[source + 1];
-        let slice = &self.forward_edges.1[start..end];
+        let start = self.forward_edges.offsets[source];
+        let end = self.forward_edges.offsets[source + 1];
 
+        // Get parallel slices for the targets and weights.
+        let targets_slice = &self.forward_edges.targets[start..end];
+        let weights_slice = &self.forward_edges.weights[start..end];
+
+        // Use `zip` to combine the parallel slices back into tuples for the user.
         Some(
-            slice
+            targets_slice
                 .iter()
-                .map(|(target, weight)| (*target, weight))
+                .zip(weights_slice.iter())
+                .map(|(&target, weight)| (target, weight))
                 .collect(),
         )
     }
@@ -92,7 +102,7 @@ impl<N: Sync + Send, W: Sync + Send> GraphView<N, W> for CsmGraph<N, W> {
     }
 
     /// Retrieves the index of the designated root node, if one exists.
-    /// This is an O(1) operation/
+    /// This is an O(1) operation.
     fn get_root_index(&self) -> Option<usize> {
         self.root_index
     }
