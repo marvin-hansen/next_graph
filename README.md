@@ -39,7 +39,15 @@ and a blazingly fast, cache-friendly structure for analyzing it.
 
 ## Installation
 
-Add `next_graph` to your `Cargo.toml`:
+Add `next_graph` to your `Cargo.toml` as git dependency:
+
+```toml
+[dependencies]
+next_graph = { git = "https://github.com/marvin-hansen/next_graph.git" , branch = "main" }
+```
+
+Note, there is no official release on crates.io so you have to use git. See
+the [official documentation for details](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html).
 
 ## Usage
 
@@ -217,8 +225,8 @@ the shortest path algorithm within 10 seconds or less.
 ## Misc.
 
 Parallel graph algorithms have been experimented with using Rayon, but none yielded any performance improvements.
-Therefore, the parallel implementation has been feature gated and moved inside an optional type extension. 
-It is not entirely clear why the parallelism on graphs with one million nodes yielded no improvement, 
+Therefore, the parallel implementation has been feature gated and moved inside an optional type extension.
+It is not entirely clear why the parallelism on graphs with one million nodes yielded no improvement,
 but at this stage it is assumed to be an implementation problem because parallel graph
 algorithms are notoriously hard to implement correctly. Contributions and PR's with improvements of
 the parallel code are welcome. The general recommendation is to stick with the existing algorithms as these are the most
